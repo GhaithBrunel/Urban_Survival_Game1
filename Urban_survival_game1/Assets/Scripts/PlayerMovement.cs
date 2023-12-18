@@ -1,7 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using UnityEngine.UI;
+using TMPro;
 
 
 public class PlayerMovement : MonoBehaviour
@@ -26,6 +27,13 @@ public class PlayerMovement : MonoBehaviour
     private float currentSprintStamina;
 
     /// </summary>
+    /// 
+
+
+    /// fall damage health 
+    private float fallVelocityThreshold = -1f; // Velocity threshold for taking fall damage
+    private float lastYVelocity; // Track the last Y velocity
+    ///
 
     public float jumpHeight = 6f;
     float velocityY;
@@ -40,8 +48,19 @@ public class PlayerMovement : MonoBehaviour
     Vector2 currentDirVelocity;
     Vector3 velocity;
 
+    /// <summary> Hunger
+
+    [SerializeField] private TextMeshProUGUI hungerText; // Reference to the TextMeshProUGUI element
+
+    [SerializeField] private float maxHunger = 100f;
+    private float currentHunger;
+    [SerializeField] private float hungerDrainRate = 1f; // The rate at which hunger decreases
+    [SerializeField] private float healthDamageRate = 5f; // Health damage per second when hunger is zero
+    private bool canRun = true;
+    /// </summary>
     void Start()
     {
+        currentHunger = maxHunger; // Initialize hunger
 
         currentSprintStamina = maxSprintStamina;
         controller = GetComponent<CharacterController>();
@@ -57,6 +76,18 @@ public class PlayerMovement : MonoBehaviour
     {
         UpdateMouse();
         UpdateMove();
+        UpdateHunger(); // Hunger
+
+
+        ///Health fall damage
+        if (isGrounded && lastYVelocity < fallVelocityThreshold)
+        {
+            OnLanding(lastYVelocity);
+        }
+
+        lastYVelocity = controller.velocity.y; // Update last Y velocity
+
+
     }
 
     void UpdateMouse()
@@ -84,10 +115,11 @@ public class PlayerMovement : MonoBehaviour
         currentDir = Vector2.SmoothDamp(currentDir, targetDir, ref currentDirVelocity, moveSmoothTime);
 
         float adjustedSpeed = Speed;
-        bool isSprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         bool isWalkingSlowly = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
 
-        if (isSprinting && currentSprintStamina > 0)
+        // Adjusted sprinting condition
+        bool isSprinting = canRun && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) && currentSprintStamina > 0;
+        if (isSprinting)
         {
             adjustedSpeed *= 1.5f; // Increase speed for sprinting
             currentSprintStamina -= sprintDrainRate * Time.deltaTime; // Drain sprint stamina
@@ -115,11 +147,17 @@ public class PlayerMovement : MonoBehaviour
             velocityY = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
 
-        if (isGrounded! && controller.velocity.y < -1f)
+        if (!isGrounded && controller.velocity.y < -1f)
         {
             velocityY = -8f;
         }
+
+        if (isGrounded && lastYVelocity < fallVelocityThreshold)
+        {
+            OnLanding(lastYVelocity);
+        }
     }
+
 
     public float GetCurrentSprintStamina()
     {
@@ -130,6 +168,54 @@ public class PlayerMovement : MonoBehaviour
     {
         return maxSprintStamina;
     }
+
+
+    private void OnLanding(float velocityY)
+    {
+        float fallDistance = Mathf.Abs(velocityY);
+        // Call a method on PlayerHealth to apply damage
+        GetComponent<PlayerHealth>().TakeFallDamage(fallDistance);
+    }
+
+
+   
+
+    private void UpdateHunger()
+    {
+        if (currentHunger > 0)
+        {
+            currentHunger -= hungerDrainRate * Time.deltaTime;
+
+            // Check if hunger is at 50%
+            if (currentHunger <= maxHunger * 0.5f && currentHunger > maxHunger * 0.5f - hungerDrainRate * Time.deltaTime)
+            {
+                hungerText.text = "Hunger is at 50%!"; // Display the message
+            }
+        }
+        else
+        {
+            // Apply health damage when hunger is zero
+            GetComponent<PlayerHealth>().TakeDamage(healthDamageRate * Time.deltaTime);
+
+            // Disable running
+            // You can do this by setting a flag that is checked in your UpdateMove method
+            canRun = false;
+        }
+    }
+
+    public float GetCurrentHunger()
+    {
+        return currentHunger;
+    }
+
+    public float GetMaxHunger()
+    {
+        return maxHunger;
+    }
+
+
+
+
 }
 
 
